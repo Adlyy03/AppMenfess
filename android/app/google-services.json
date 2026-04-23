@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "485182792817",
+    "project_id": "appmenfess",
+    "storage_bucket": "appmenfess.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:485182792817:android:ef60cf42016d458b4427d0",
+        "android_client_info": {
+          "package_name": "com.company.menfess_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD6dMa7fp1YRlvE3S0LBbYnSyDUoazySZc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:485182792817:android:4411c0cba277f8064427d0",
+        "android_client_info": {
+          "package_name": "com.example.menfess_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD6dMa7fp1YRlvE3S0LBbYnSyDUoazySZc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
