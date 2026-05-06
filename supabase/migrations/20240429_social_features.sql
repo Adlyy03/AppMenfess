@@ -39,12 +39,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Increment View
 DROP FUNCTION IF EXISTS increment_view(uuid);
-CREATE OR REPLACE FUNCTION increment_view(menfess_id UUID)
+CREATE OR REPLACE FUNCTION increment_view(p_menfess_id UUID)
 RETURNS void AS $$
 BEGIN
   UPDATE public.menfess
   SET view_count = view_count + 1
-  WHERE id = menfess_id;
+  WHERE id = p_menfess_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

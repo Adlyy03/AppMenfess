@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'config/supabase_config.dart';
-import 'core/app_theme.dart';
+import 'core/neo_brutalism_theme.dart';
 import 'providers/app_provider.dart';
-import 'screens/main_navigation.dart';
+import 'providers/admin_provider.dart';
+import 'screens/user/main_navigation.dart';
 import 'screens/auth_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/admin/admin_dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +30,7 @@ class MenfessApp extends StatefulWidget {
 
 class _MenfessAppState extends State<MenfessApp> {
   late final AppProvider _provider;
+  late final AdminProvider _adminProvider;
   late StreamSubscription<AuthState> _authSubscription;
   bool _showSplash = true;
 
@@ -35,6 +38,7 @@ class _MenfessAppState extends State<MenfessApp> {
   void initState() {
     super.initState();
     _provider = AppProvider();
+    _adminProvider = AdminProvider();
     _setupAuthListener();
     _initApp();
   }
@@ -50,6 +54,8 @@ class _MenfessAppState extends State<MenfessApp> {
         if (session != null && session.user.id.isNotEmpty) {
           debugPrint('✅ LOGIN: ${session.user.email}');
           _provider.setUserId(session.user.id);
+          // Initialize admin provider for logged-in users
+          _adminProvider.initialize();
         } else {
           debugPrint('❌ LOGOUT');
           _provider.setUserId(null);
@@ -80,26 +86,42 @@ class _MenfessAppState extends State<MenfessApp> {
 
   @override
   Widget build(BuildContext context) {
-    final userId = _provider.userId;
-
     // Clean OAuth ?code= param from URL on web — guarded so mobile doesn't crash
     _cleanOAuthUrl();
 
     return ListenableBuilder(
-      listenable: _provider,
+      listenable: Listenable.merge([_provider, _adminProvider]),
       builder: (context, _) {
         final userId = _provider.userId;
+        
+        // Determine home screen based on user role
+        Widget homeScreen;
+        if (userId != null) {
+          // Check if user is admin (super_admin or moderator)
+          if (_adminProvider.isAdmin) {
+            // Admin users go directly to Admin Dashboard
+            homeScreen = AdminDashboardScreen(
+              adminProvider: _adminProvider,
+              appProvider: _provider,
+            );
+          } else {
+            // Regular users go to Main Navigation
+            homeScreen = MainNavigation(
+              provider: _provider,
+              adminProvider: _adminProvider,
+            );
+          }
+        } else {
+          // Not logged in, show auth screen
+          homeScreen = AuthScreen(provider: _provider);
+        }
+
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Menfess Sekolah',
-          theme: AppTheme.light,
-          darkTheme: AppTheme.dark,
-          themeMode: ThemeMode.system,
-          home: _showSplash
-              ? const SplashScreen()
-              : (userId != null
-                  ? MainNavigation(provider: _provider)
-                  : AuthScreen(provider: _provider)),
+          theme: NeoBrutalismTheme.theme,
+          themeMode: ThemeMode.light,
+          home: _showSplash ? const SplashScreen() : homeScreen,
         );
       },
     );

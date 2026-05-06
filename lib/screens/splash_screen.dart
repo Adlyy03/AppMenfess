@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../core/neo_brutalism_theme.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SPLASH SCREEN — Neo-Brutalism Style
+// ─────────────────────────────────────────────────────────────────────────────
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -8,163 +14,148 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scale;
-  late Animation<double> _opacity;
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestNotificationPermission();
+    });
+
+    _pulseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-
-    _scale = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-    );
-
-    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.5, curve: Curves.easeIn)),
-    );
-
-    _controller.forward();
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
-      backgroundColor: const Color(0xFF060410), // Matching premium dark bg
-      body: Stack(
-        children: [
-          // Background Gradient Glow
-          Positioned(
-            top: -100,
-            right: -100,
-            child: Container(
-              width: 300,
-              height: 300,
+      backgroundColor: NeoBrutalismTheme.white,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Logo
+            Container(
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: theme.colorScheme.primary.withOpacity(0.15),
+                color: NeoBrutalismTheme.yellow,
+                border: Border.all(
+                  color: NeoBrutalismTheme.black,
+                  width: NeoBrutalismTheme.borderWidth,
+                ),
+                boxShadow: [
+                  NeoBrutalismTheme.hardShadow(offsetX: 8, offsetY: 8),
+                ],
+              ),
+              child: const Icon(
+                Icons.bolt,
+                size: 64,
+                color: NeoBrutalismTheme.black,
               ),
             ),
-          ),
-          Positioned(
-            bottom: -50,
-            left: -50,
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: theme.colorScheme.secondary.withOpacity(0.1),
+
+            const SizedBox(height: 32),
+
+            // App name
+            Text(
+              'MENFESS',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 40,
+                fontWeight: FontWeight.w900,
+                color: NeoBrutalismTheme.black,
+                letterSpacing: 2.0,
               ),
             ),
-          ),
-          
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ScaleTransition(
-                  scale: _scale,
-                  child: FadeTransition(
-                    opacity: _opacity,
-                    child: Container(
-                      width: 100,
-                      height: 100,
+
+            const SizedBox(height: 12),
+
+            // Tagline
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: NeoBrutalismTheme.blue,
+                border: Border.all(
+                  color: NeoBrutalismTheme.black,
+                  width: NeoBrutalismTheme.borderWidthThin,
+                ),
+              ),
+              child: Text(
+                'BERBAGI PESAN ANONIM',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: NeoBrutalismTheme.white,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 40),
+
+            // Loading indicator
+            AnimatedBuilder(
+              animation: _pulseCtrl,
+              builder: (context, child) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(3, (i) {
+                    final delay = i * 0.2;
+                    final opacity = ((_pulseCtrl.value - delay).clamp(0.0, 1.0) * 2)
+                        .clamp(0.3, 1.0);
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
+                      width: 12,
+                      height: 12,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.colorScheme.primary.withOpacity(0.4),
-                            blurRadius: 30,
-                            offset: const Offset(0, 15),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.bolt_rounded, size: 50, color: Colors.white),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                FadeTransition(
-                  opacity: _opacity,
-                  child: Column(
-                    children: [
-                      Text(
-                        'MENFESS',
-                        style: GoogleFonts.poppins(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: 4,
+                        color: NeoBrutalismTheme.black.withOpacity(opacity),
+                        border: Border.all(
+                          color: NeoBrutalismTheme.black,
+                          width: 2,
                         ),
                       ),
-                      Text(
-                        'SKANIC',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.secondary,
-                          letterSpacing: 8,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                    );
+                  }),
+                );
+              },
             ),
-          ),
-          
-          // Bottom Footer
-          Positioned(
-            bottom: 40,
-            left: 0,
-            right: 0,
-            child: FadeTransition(
-              opacity: _opacity,
-              child: Center(
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: theme.colorScheme.primary.withOpacity(0.5),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Premium Social Platform',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withOpacity(0.3),
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
+
+            const SizedBox(height: 16),
+
+            Text(
+              'MEMUAT...',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: NeoBrutalismTheme.black.withOpacity(0.6),
+                letterSpacing: 1.5,
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    if (kIsWeb) return;
+    await Future.delayed(const Duration(milliseconds: 1000));
+    try {
+      final status = await Permission.notification.request();
+      debugPrint('🔔 Notification Permission Status: $status');
+    } catch (e) {
+      debugPrint('🔔 Skip notification permission: $e');
+    }
   }
 }

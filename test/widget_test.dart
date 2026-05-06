@@ -7,24 +7,41 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:menfess_app/main.dart';
+import 'package:menfess_app/core/neo_brutalism_theme.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Neo-brutalism theme loads correctly', (WidgetTester tester) async {
+    // Build a simple widget with the theme
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: NeoBrutalismTheme.theme,
+        home: const Scaffold(
+          body: Center(
+            child: Text('Test App'),
+          ),
+        ),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Verify that the widget renders
+    expect(find.text('Test App'), findsOneWidget);
+    expect(find.byType(Scaffold), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('Theme colors are correctly defined', (WidgetTester tester) async {
+    // Test that theme colors are not null and have expected values
+    expect(NeoBrutalismTheme.yellow, equals(const Color(0xFFFFD600)));
+    expect(NeoBrutalismTheme.red, equals(const Color(0xFFFF3B3B)));
+    expect(NeoBrutalismTheme.blue, equals(const Color(0xFF0057FF)));
+    expect(NeoBrutalismTheme.black, equals(const Color(0xFF000000)));
+    expect(NeoBrutalismTheme.white, equals(const Color(0xFFFFFFFF)));
+    expect(NeoBrutalismTheme.green, equals(const Color(0xFF00FF00)));
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('Border constants are correctly defined', (WidgetTester tester) async {
+    // Test border width constants
+    expect(NeoBrutalismTheme.borderWidth, equals(4.0));
+    expect(NeoBrutalismTheme.borderWidthThin, equals(3.0));
+    expect(NeoBrutalismTheme.borderRadius, equals(0.0));
   });
 }

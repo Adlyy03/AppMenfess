@@ -79,9 +79,12 @@ class MenfessService {
     }
   }
 
-  Future<void> incrementView(String menfessId) async {
+  Future<void> incrementView(String menfessId, String userId) async {
     try {
-      await _client.rpc('increment_view', params: {'menfess_id': menfessId});
+      await _client.rpc('increment_view', params: {
+        'menfess_id': menfessId,
+        'user_id': userId,
+      });
     } catch (e) {
       debugPrint('Error incrementing view: $e');
       // Don't rethrow - view count errors shouldn't break the app

@@ -9,6 +9,9 @@ import '../services/menfess_service.dart';
 import '../services/reaction_service.dart';
 import '../services/comment_service.dart';
 import '../services/user_service.dart';
+import '../services/bookmark_service.dart';
+import '../services/notification_service.dart';
+import '../models/notification_model.dart';
 
 class AppProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -16,6 +19,7 @@ class AppProvider extends ChangeNotifier {
   final ReactionService _reactionService = ReactionService();
   final CommentService _commentService = CommentService();
   final UserService _userService = UserService();
+  final BookmarkService _bookmarkService = BookmarkService();
 
   RealtimeChannel? _realtimeChannel;
 
@@ -64,6 +68,13 @@ class AppProvider extends ChangeNotifier {
   final Set<String> _likeLoading = {};
   bool isLikeLoading(String menfessId) => _likeLoading.contains(menfessId);
 
+  // ── Bookmark state ────────────────────────────────────────────────────────
+  /// menfessId → isBookmarked by current user
+  final Map<String, bool> _bookmarkedMap = {};
+  bool isBookmarked(String menfessId) => _bookmarkedMap[menfessId] ?? false;
+  final Set<String> _bookmarkLoading = {};
+  bool isBookmarkLoading(String menfessId) => _bookmarkLoading.contains(menfessId);
+
   // ── Comment state ─────────────────────────────────────────────────────────
   /// menfessId → list of loaded comments
   final Map<String, List<CommentModel>> _commentsMap = {};
@@ -82,22 +93,41 @@ class AppProvider extends ChangeNotifier {
   // ── View tracking (in-memory de-dup) ─────────────────────────────────────
   final Set<String> _viewedInSession = {};
 
+  // ── Notification state ───────────────────────────────────────────────────
+  List<NotificationModel> _notifications = [];
+  List<NotificationModel> get notifications => _notifications;
+  bool _notifLoading = false;
+  bool get notifLoading => _notifLoading;
+  
+  int get unreadNotificationCount => _notifications.where((n) => !n.isRead).length;
+
   // ── Auth ──────────────────────────────────────────────────────────────────
   void setUserId(String? id) {
+    final oldId = _userId;
     _userId = id;
+    
     if (id == null) {
       _likedMap.clear();
+      _bookmarkedMap.clear();
       _likeCountDelta.clear();
+    } else if (id != oldId && _menfessList.isNotEmpty) {
+      // Reload liked/bookmarked status for existing list if user changed/logged in
+      _loadLikedStatus(_menfessList);
     }
     notifyListeners();
   }
 
   Future<void> init() async {
     _userId = _authService.getCurrentUser()?.id;
+    
+    // Init Local Notifications
+    await NotificationService.init();
+
     await Future.wait([
       fetchMenfess(),
       fetchHotToday(),
       fetchUserStats(),
+      fetchNotifications(),
     ]);
     _setupRealtime();
   }
@@ -149,6 +179,36 @@ class AppProvider extends ChangeNotifier {
       );
     
     _realtimeChannel!.subscribe();
+
+    // ── Notifications Channel ───────────────────────────────────────────
+    if (_userId != null) {
+      supabase.channel('public:notifications:$_userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: _userId!,
+          ),
+          callback: (payload) {
+            final notif = NotificationModel.fromMap(payload.newRecord);
+            
+            // Add to local list
+            _notifications.insert(0, notif);
+            
+            // Trigger Local Notification
+            NotificationService.showNotification(
+              id: notif.hashCode,
+              title: notif.title,
+              body: notif.body,
+            );
+            
+            notifyListeners();
+          },
+        ).subscribe();
+    }
   }
 
   // ── Feed ──────────────────────────────────────────────────────────────────
@@ -262,8 +322,10 @@ class AppProvider extends ChangeNotifier {
     if (_userId == null || posts.isEmpty) return;
     final ids = posts.map((m) => m.id).toList();
     final liked = await _reactionService.getLikedIds(_userId!, ids);
+    final bookmarked = await _bookmarkService.getBookmarkedIds(_userId!, ids);
     for (final id in ids) {
       _likedMap[id] = liked.contains(id);
+      _bookmarkedMap[id] = bookmarked.contains(id);
     }
   }
 
@@ -296,17 +358,52 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> toggleBookmark(String menfessId) async {
+    if (_userId == null) return;
+    if (_bookmarkLoading.contains(menfessId)) return;
+
+    final wasBookmarked = _bookmarkedMap[menfessId] ?? false;
+
+    // Optimistic update
+    HapticFeedback.lightImpact();
+    _bookmarkedMap[menfessId] = !wasBookmarked;
+    _bookmarkLoading.add(menfessId);
+    notifyListeners();
+
+    try {
+      debugPrint('📌 Toggling bookmark for $menfessId (User: $_userId)');
+      final isNowBookmarked = await _bookmarkService.toggleBookmark(_userId!, menfessId);
+      debugPrint('✅ Bookmark status for $menfessId: $isNowBookmarked');
+      
+      // Ensure local state matches DB result
+      _bookmarkedMap[menfessId] = isNowBookmarked;
+    } catch (e) {
+      _bookmarkedMap[menfessId] = wasBookmarked;
+      debugPrint('❌ Error toggling bookmark: $e');
+    } finally {
+      _bookmarkLoading.remove(menfessId);
+      notifyListeners();
+    }
+  }
+
   /// Returns the displayed like count (base + optimistic delta).
   int likeCount(MenfessModel menfess) {
     final delta = _likeCountDelta[menfess.id] ?? 0;
     return (menfess.likeCount + delta).clamp(0, 999999);
   }
 
+  Future<List<String>> getAllBookmarkedIds() async {
+    if (_userId == null) return [];
+    return await _bookmarkService.getAllBookmarkedIds(_userId!);
+  }
+
   // ── Comments ──────────────────────────────────────────────────────────────
   Future<void> loadComments(String menfessId) async {
     if (_commentLoading.contains(menfessId)) return;
     _commentLoading.add(menfessId);
-    notifyListeners();
+    
+    // Gunakan microtask biar nggak bentrok sama proses build widget
+    Future.microtask(() => notifyListeners());
 
     final list = await _commentService.getComments(menfessId);
     _commentsMap[menfessId] = list;
@@ -350,9 +447,52 @@ class AppProvider extends ChangeNotifier {
   // ── Views ─────────────────────────────────────────────────────────────────
   /// Safe one-per-session view increment. Call when card becomes visible.
   Future<void> trackView(String menfessId) async {
+    if (_userId == null) return;
     if (_viewedInSession.contains(menfessId)) return;
     _viewedInSession.add(menfessId);
-    await _menfessService.incrementView(menfessId);
+    await _menfessService.incrementView(menfessId, _userId!);
+  }
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  Future<void> fetchNotifications() async {
+    if (_userId == null) return;
+    _notifLoading = true;
+    notifyListeners();
+
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase
+          .from('notifications')
+          .select()
+          .eq('user_id', _userId!)
+          .order('created_at', ascending: false)
+          .limit(50);
+      
+      _notifications = (response as List)
+          .map((e) => NotificationModel.fromMap(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching notifications: $e');
+    } finally {
+      _notifLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> markNotificationsAsRead() async {
+    if (_userId == null || _notifications.isEmpty) return;
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('user_id', _userId!);
+      
+      // Update local state
+      fetchNotifications();
+    } catch (e) {
+      debugPrint('Error marking notifications as read: $e');
+    }
   }
 
   // ── Auth delegates ────────────────────────────────────────────────────────
@@ -395,6 +535,7 @@ class AppProvider extends ChangeNotifier {
       await _authService.signOut();
       _userId = null;
       _likedMap.clear();
+      _bookmarkedMap.clear();
       _likeCountDelta.clear();
       _commentsMap.clear();
       _viewedInSession.clear();
