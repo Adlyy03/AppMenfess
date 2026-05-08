@@ -105,6 +105,36 @@ class NeoBrutalismTheme {
         letterSpacing: 1.0,
       );
 
+  
+  static const Color gray = Colors.grey;
+  static const Color lightGray = Color(0xFFE0E0E0);
+
+  static final TextTheme textTheme = TextTheme(
+    headlineSmall: TextStyle(
+      fontSize: 24,
+      fontWeight: FontWeight.bold,
+      color: Colors.black,
+    ),
+    titleMedium: TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.w600,
+      color: Colors.black,
+    ),
+    bodyMedium: TextStyle(
+      fontSize: 14,
+      color: Colors.black,
+    ),
+    bodySmall: TextStyle(
+      fontSize: 12,
+      color: Colors.black54,
+    ),
+    labelLarge: TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.bold,
+      color: Colors.white,
+    ),
+  );
+
   // ── Button Styles ──────────────────────────────────────────────────────────
   static BoxDecoration buttonDecoration({
     required Color bgColor,

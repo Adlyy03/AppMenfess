@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../providers/app_provider.dart';
 import '../../providers/admin_provider.dart';
+import '../../providers/update_provider.dart';
 import '../../core/neo_brutalism_theme.dart';
 import '../../widgets/user/bottom_nav.dart';
+import '../../widgets/update/update_banner.dart';
 import 'home_screen.dart';
 import 'create_screen.dart';
 import 'profile_screen.dart';
@@ -17,10 +19,13 @@ import '../admin/admin_dashboard_screen.dart';
 class MainNavigation extends StatefulWidget {
   final AppProvider provider;
   final AdminProvider adminProvider;
+  final UpdateProvider updateProvider;
+  
   const MainNavigation({
     super.key,
     required this.provider,
     required this.adminProvider,
+    required this.updateProvider,
   });
 
   @override
@@ -111,6 +116,29 @@ class _MainNavigationState extends State<MainNavigation>
               ),
             ),
           ),
+          
+          // Update Banner (shows at top if update available)
+          ListenableBuilder(
+            listenable: widget.updateProvider,
+            builder: (context, _) {
+              if (!widget.updateProvider.hasUpdateAvailable) {
+                return const SizedBox.shrink();
+              }
+              
+              return Positioned(
+                top: MediaQuery.of(context).padding.top,
+                left: 0,
+                right: 0,
+                child: UpdateBanner(
+                  versionInfo: widget.updateProvider.availableUpdate!,
+                  onUpdateComplete: () {
+                    widget.updateProvider.dismissUpdate();
+                  },
+                ),
+              );
+            },
+          ),
+          
           // Admin Access Button (Floating)
           ListenableBuilder(
             listenable: widget.adminProvider,

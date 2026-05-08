@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
@@ -18,6 +19,15 @@ class NotificationService {
         // Handle tap on notification if needed
       },
     );
+  }
+
+  static Future<void> requestPermission() async {
+    final status = await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+    
+    debugPrint('🔔 Notification Permission Status: $status');
   }
 
   static Future<void> showNotification({

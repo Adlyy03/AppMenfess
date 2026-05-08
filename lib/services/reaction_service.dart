@@ -53,8 +53,6 @@ class ReactionService {
             .delete()
             .eq('menfess_id', menfessId)
             .eq('user_id', userId);
-        // Decrement count via RPC
-        await _client.rpc('decrement_like', params: {'p_menfess_id': menfessId});
         return false;
       } else {
         await _client.from('reactions').upsert({
@@ -62,8 +60,6 @@ class ReactionService {
           'user_id': userId,
           'type': 'like',
         }, onConflict: 'menfess_id,user_id');
-        // Increment count via RPC
-        await _client.rpc('increment_like', params: {'p_menfess_id': menfessId});
         return true;
       }
     } catch (e) {

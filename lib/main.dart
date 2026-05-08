@@ -5,10 +5,10 @@ import 'config/supabase_config.dart';
 import 'core/neo_brutalism_theme.dart';
 import 'providers/app_provider.dart';
 import 'providers/admin_provider.dart';
+import 'providers/update_provider.dart';
 import 'screens/user/main_navigation.dart';
 import 'screens/auth_screen.dart';
 import 'screens/splash_screen.dart';
-import 'screens/admin/admin_dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +31,7 @@ class MenfessApp extends StatefulWidget {
 class _MenfessAppState extends State<MenfessApp> {
   late final AppProvider _provider;
   late final AdminProvider _adminProvider;
+  late final UpdateProvider _updateProvider;
   late StreamSubscription<AuthState> _authSubscription;
   bool _showSplash = true;
 
@@ -39,6 +40,7 @@ class _MenfessAppState extends State<MenfessApp> {
     super.initState();
     _provider = AppProvider();
     _adminProvider = AdminProvider();
+    _updateProvider = UpdateProvider();
     _setupAuthListener();
     _initApp();
   }
@@ -71,6 +73,10 @@ class _MenfessAppState extends State<MenfessApp> {
 
   Future<void> _initApp() async {
     await _provider.init();
+    
+    // Auto-check for updates after app initialization
+    _updateProvider.autoCheckForUpdates();
+    
     // Beri jeda sedikit agar animasi splash terlihat cantik
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) {
@@ -90,27 +96,20 @@ class _MenfessAppState extends State<MenfessApp> {
     _cleanOAuthUrl();
 
     return ListenableBuilder(
-      listenable: Listenable.merge([_provider, _adminProvider]),
+      listenable: Listenable.merge([_provider, _adminProvider, _updateProvider]),
       builder: (context, _) {
         final userId = _provider.userId;
         
-        // Determine home screen based on user role
+        // Determine home screen based on authentication status
         Widget homeScreen;
         if (userId != null) {
-          // Check if user is admin (super_admin or moderator)
-          if (_adminProvider.isAdmin) {
-            // Admin users go directly to Admin Dashboard
-            homeScreen = AdminDashboardScreen(
-              adminProvider: _adminProvider,
-              appProvider: _provider,
-            );
-          } else {
-            // Regular users go to Main Navigation
-            homeScreen = MainNavigation(
-              provider: _provider,
-              adminProvider: _adminProvider,
-            );
-          }
+          // All authenticated users go to Main Navigation (user home)
+          // Admin access is handled through the admin tab in bottom navigation
+          homeScreen = MainNavigation(
+            provider: _provider,
+            adminProvider: _adminProvider,
+            updateProvider: _updateProvider,
+          );
         } else {
           // Not logged in, show auth screen
           homeScreen = AuthScreen(provider: _provider);

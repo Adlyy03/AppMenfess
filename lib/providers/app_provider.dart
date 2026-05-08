@@ -21,7 +21,8 @@ class AppProvider extends ChangeNotifier {
   final UserService _userService = UserService();
   final BookmarkService _bookmarkService = BookmarkService();
 
-  RealtimeChannel? _realtimeChannel;
+  RealtimeChannel? _menfessChannel;
+  RealtimeChannel? _notificationChannel;
 
   // ── Feed state ────────────────────────────────────────────────────────────
   List<MenfessModel> _menfessList = [];
@@ -110,9 +111,17 @@ class AppProvider extends ChangeNotifier {
       _likedMap.clear();
       _bookmarkedMap.clear();
       _likeCountDelta.clear();
-    } else if (id != oldId && _menfessList.isNotEmpty) {
-      // Reload liked/bookmarked status for existing list if user changed/logged in
-      _loadLikedStatus(_menfessList);
+      _notificationChannel?.unsubscribe();
+      _notificationChannel = null;
+    } else {
+      if (id != oldId) {
+        if (_menfessList.isNotEmpty) {
+          _loadLikedStatus(_menfessList);
+        }
+        // Reset and setup new notification channel for this user
+        _setupUserRealtime();
+        fetchNotifications();
+      }
     }
     notifyListeners();
   }
@@ -120,8 +129,9 @@ class AppProvider extends ChangeNotifier {
   Future<void> init() async {
     _userId = _authService.getCurrentUser()?.id;
     
-    // Init Local Notifications
+    // Init Local Notifications & Request Permission
     await NotificationService.init();
+    await NotificationService.requestPermission();
 
     await Future.wait([
       fetchMenfess(),
@@ -129,13 +139,16 @@ class AppProvider extends ChangeNotifier {
       fetchUserStats(),
       fetchNotifications(),
     ]);
-    _setupRealtime();
+    
+    _setupGlobalRealtime();
+    _setupUserRealtime();
   }
 
-  void _setupRealtime() {
+  void _setupGlobalRealtime() {
     final supabase = Supabase.instance.client;
     
-    _realtimeChannel = supabase.channel('public:menfess')
+    _menfessChannel?.unsubscribe();
+    _menfessChannel = supabase.channel('public:menfess')
       .onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
@@ -146,7 +159,6 @@ class AppProvider extends ChangeNotifier {
           final newLikeCount = newData['like_count'] as int;
           final newCommentCount = newData['comment_count'] as int;
 
-          // Update main feed list
           bool updated = false;
           _menfessList = _menfessList.map((m) {
             if (m.id == id) {
@@ -159,7 +171,6 @@ class AppProvider extends ChangeNotifier {
             return m;
           }).toList();
 
-          // Update hot/trending list
           _hotMenfess = _hotMenfess.map((m) {
             if (m.id == id) {
               updated = true;
@@ -172,27 +183,35 @@ class AppProvider extends ChangeNotifier {
           }).toList();
 
           if (updated) {
-            debugPrint('⚡ Realtime Update for $id: Likes $newLikeCount, Comments $newCommentCount');
+            _likeCountDelta.remove(id); // Hapus angka sementara begitu data asli masuk
             notifyListeners();
           }
         },
       );
     
-    _realtimeChannel!.subscribe();
+    _menfessChannel!.subscribe();
+  }
 
-    // ── Notifications Channel ───────────────────────────────────────────
-    if (_userId != null) {
-      supabase.channel('public:notifications:$_userId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'notifications',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: _userId!,
-          ),
-          callback: (payload) {
+  void _setupUserRealtime() {
+    if (_userId == null) return;
+    
+    final supabase = Supabase.instance.client;
+    
+    // Clean old subscription if exists
+    _notificationChannel?.unsubscribe();
+    
+    _notificationChannel = supabase.channel('user_notifs:$_userId')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'notifications',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'user_id',
+          value: _userId!,
+        ),
+        callback: (payload) {
+          try {
             final notif = NotificationModel.fromMap(payload.newRecord);
             
             // Add to local list
@@ -200,15 +219,20 @@ class AppProvider extends ChangeNotifier {
             
             // Trigger Local Notification
             NotificationService.showNotification(
-              id: notif.hashCode,
+              id: notif.id.hashCode,
               title: notif.title,
               body: notif.body,
             );
             
             notifyListeners();
-          },
-        ).subscribe();
-    }
+            HapticFeedback.vibrate();
+          } catch (e) {
+            debugPrint('❌ Error processing realtime notification: $e');
+          }
+        },
+      );
+      
+    _notificationChannel!.subscribe();
   }
 
   // ── Feed ──────────────────────────────────────────────────────────────────
@@ -353,6 +377,7 @@ class AppProvider extends ChangeNotifier {
           (_likeCountDelta[menfessId] ?? 0) + (wasLiked ? 1 : -1);
       debugPrint('AppProvider.toggleLike error: $e');
     } finally {
+      _likeCountDelta.remove(menfessId);
       _likeLoading.remove(menfessId);
       notifyListeners();
     }
@@ -531,7 +556,10 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
-      _realtimeChannel?.unsubscribe();
+      _menfessChannel?.unsubscribe();
+      _notificationChannel?.unsubscribe();
+      _menfessChannel = null;
+      _notificationChannel = null;
       await _authService.signOut();
       _userId = null;
       _likedMap.clear();
